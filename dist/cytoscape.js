@@ -1,5 +1,5 @@
 /*!
- * This file is part of Cytoscape.js 2.4.7.
+ * This file is part of Cytoscape.js snapshot-659e852006-1441960165939.
  *
  * Cytoscape.js is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the Free
@@ -28,7 +28,7 @@ var cytoscape;
     return cytoscape.init.apply(cytoscape, arguments);
   };
 
-  $$.version = '2.4.7';
+  $$.version = 'snapshot-659e852006-1441960165939';
 
   // allow functional access to cytoscape.js
   // e.g. var cyto = $.cytoscape({ selector: "#foo", ... });
@@ -553,48 +553,9 @@ this.cytoscape = cytoscape;
         if( ret !== undefined ){ fulfil(ret); }
         if( next ){ next(); }
       };
-      var onCheckWindowDone = function(){
-        if( !done ){
-          checkCommonJs( onCheckCommonJsDone );
-        }
-      };
-
-      var checkCommonJs = function( next ){
-        if( typeof module !== 'undefined' && module.exports && require ){ // detected commonjs env
-          try {
-            ret = require( name ); // regular require
-          } catch( err ){}
-        }
-
-        if( ret !== undefined ){ fulfil(ret); }
-        if( next ){ next(); }
-      };
-      var onCheckCommonJsDone = function(){
-        if( !done ){
-          checkAmd( onCheckAmdDone );
-        }
-      };
-
-      var checkAmd = function( next ){
-        if( typeof define !== 'undefined' && define.amd && require ){ // detected amd env w/ defined module
-          require([ name ], function( nameImpl ){
-            ret = nameImpl;
-
-            if( ret !== undefined ){ fulfil(ret); }
-            if( next ){ next(); }
-          }, function( err ){
-            if( next ){ next(); }
-          });
-        }
-      };
-      var onCheckAmdDone = function(){
-        if( !done && options.msgIfNotFound ){
-          $$.util.error('Cytoscape.js tried to pull in dependency `' + name + '` but no module (i.e. CommonJS, AMD, or window) was found');
-        }
-      };
 
       // kick off 1st check: window
-      checkWindow( onCheckWindowDone );
+      checkWindow();
 
     },
 
@@ -1334,7 +1295,7 @@ this.cytoscape = cytoscape;
 
   $$.util.regex = {};
 
-  $$.util.regex.number = "(?:[-]?\\d*\\.\\d+|[-]?\\d+|[-]?\\d*\\.\\d+[eE]\\d+)";
+  $$.util.regex.number = "(?:[-+]?(?:(?:\\d+|\\d*\\.\\d+)(?:[Ee][+-]?\\d+)?))";
 
   $$.util.regex.rgba = "rgb[a]?\\(("+ $$.util.regex.number +"[%]?)\\s*,\\s*("+ $$.util.regex.number +"[%]?)\\s*,\\s*("+ $$.util.regex.number +"[%]?)(?:\\s*,\\s*("+ $$.util.regex.number +"))?\\)";
   $$.util.regex.rgbaNoBackRefs = "rgb[a]?\\((?:"+ $$.util.regex.number +"[%]?)\\s*,\\s*(?:"+ $$.util.regex.number +"[%]?)\\s*,\\s*(?:"+ $$.util.regex.number +"[%]?)(?:\\s*,\\s*(?:"+ $$.util.regex.number +"))?\\)";
@@ -3115,10 +3076,6 @@ this.cytoscape = cytoscape;
   };
 
   $$.registerJquery( $ ); // try to register with global jquery for convenience
-
-  $$.util.require('jquery', function( $ ){
-    $$.registerJquery( $ ); // try to register with require()d jquery
-  });
 
 })(typeof jQuery !== 'undefined' ? jQuery : null , cytoscape);
 
@@ -6480,9 +6437,12 @@ this.cytoscape = cytoscape;
 
   // only useful in specific cases like animation
   $$.styfn.overrideBypass = function( eles, name, value ){
+    name = $$.util.camel2dash(name);
+
     for( var i = 0; i < eles.length; i++ ){
       var ele = eles[i];
-      var prop = ele._private.style[ $$.util.camel2dash(name) ];
+      var prop = ele._private.style[ name ];
+      var isColor = $$.style.properties[ name ].type.color;
 
       if( !prop.bypass ){ // need a bypass if one doesn't exist
         this.applyBypass( ele, name, value );
@@ -6490,7 +6450,16 @@ this.cytoscape = cytoscape;
       }
 
       prop.value = value;
-      prop.pxValue = value;
+
+      if( prop.pxValue != null ){
+        prop.pxValue = value;
+      }
+
+      if( isColor ){
+        prop.strValue = 'rgb(' + prop.value.join(',') + ')';
+      } else {
+        prop.strValue = '' + value;
+      }
     }
   };
 
@@ -7166,9 +7135,6 @@ this.cytoscape = cytoscape;
         });
       }
 
-      var useWW = window != null;
-      var useNode = typeof module !== 'undefined';
-
       self.trigger('run');
 
       var runP = new $$.Promise(function( resolve, reject ){
@@ -7183,20 +7149,16 @@ this.cytoscape = cytoscape;
         var fnStr = '\n' + ( _p.requires.map(function( r ){
           return fnAsRequire( r );
         }) ).concat( _p.files.map(function( f ){
-          if( useWW ){
-            var wwifyFile = function( file ){
-              if( file.match(/^\.\//) || file.match(/^\.\./) ){
-                return window.location.origin + window.location.pathname + file;
-              } else if( file.match(/^\//) ){
-                return window.location.origin + '/' + file;
-              }
-              return file;
-            };
+          var wwifyFile = function( file ){
+            if( file.match(/^\.\//) || file.match(/^\.\./) ){
+              return window.location.origin + window.location.pathname + file;
+            } else if( file.match(/^\//) ){
+              return window.location.origin + '/' + file;
+            }
+            return file;
+          };
 
-            return 'importScripts("' + wwifyFile(f) + '");';
-          } else if( useNode ) {
-            return 'eval( require("fs").readFileSync("' + f + '", { encoding: "utf8" }) );';
-          }
+          return 'importScripts("' + wwifyFile(f) + '");';
         }) ).concat([
           '( function(){',
             'var ret = (' + fnImplStr + ')(' + JSON.stringify(pass) + ');',
@@ -7208,36 +7170,35 @@ this.cytoscape = cytoscape;
         _p.requires = [];
         _p.files = [];
 
-        if( useWW ){
-          var fnBlob, fnUrl;
+        var fnBlob, fnUrl;
 
-          // add normalised thread api functions
-          if( !threadTechAlreadyExists ){
-            var fnPre = fnStr + '';
+        // add normalised thread api functions
+        if( !threadTechAlreadyExists ){
+          var fnPre = fnStr + '';
 
-            fnStr = [
-              'function broadcast(m){ return message(m); };', // alias
-              'function message(m){ postMessage(m); };',
-              'function listen(fn){',
-              '  self.addEventListener("message", function(m){ ',
-              '    if( typeof m === "object" && (m.data.$$eval || m.data === "$$start") ){',
-              '    } else { ',
-              '      fn( m.data );',
-              '    }',
-              '  });',
-              '};',
-              'self.addEventListener("message", function(m){  if( m.data.$$eval ){ eval( m.data.$$eval ); }  });',
-              'function resolve(v){ postMessage({ $$resolve: v }); };',
-              'function reject(v){ postMessage({ $$reject: v }); };'
-            ].join('\n');
+          fnStr = [
+            'function broadcast(m){ return message(m); };', // alias
+            'function message(m){ postMessage(m); };',
+            'function listen(fn){',
+            '  self.addEventListener("message", function(m){ ',
+            '    if( typeof m === "object" && (m.data.$$eval || m.data === "$$start") ){',
+            '    } else { ',
+            '      fn( m.data );',
+            '    }',
+            '  });',
+            '};',
+            'self.addEventListener("message", function(m){  if( m.data.$$eval ){ eval( m.data.$$eval ); }  });',
+            'function resolve(v){ postMessage({ $$resolve: v }); };',
+            'function reject(v){ postMessage({ $$reject: v }); };'
+          ].join('\n');
 
-            fnStr += fnPre;
+          fnStr += fnPre;
 
-            fnBlob = new Blob([ fnStr ], {
-              type: 'application/javascript'
-            });
-            fnUrl = window.URL.createObjectURL( fnBlob );
-          }
+          fnBlob = new Blob([ fnStr ], {
+            type: 'application/javascript'
+          });
+          fnUrl = window.URL.createObjectURL( fnBlob );
+
           // create webworker and let it exec the serialised code
           var ww = _p.webworker = _p.webworker || new Worker( fnUrl );
 
@@ -7269,32 +7230,6 @@ this.cytoscape = cytoscape;
             ww.postMessage('$$start'); // start up the worker
           }
 
-        } else if( useNode ){
-          // create a new process
-          var path = require('path');
-          var child_process = require('child_process');
-          var child = _p.child = _p.child || child_process.fork( path.join(__dirname, 'thread-node-fork') );
-
-          // child process messages => events
-          var cb;
-          child.on('message', cb = function( m ){
-            if( $$.is.object(m) && ('$$resolve' in m) ){
-              child.removeListener('message', cb); // done listening b/c resolve()
-
-              resolve( m.$$resolve );
-            } else if( $$.is.object(m) && ('$$reject' in m) ){
-              child.removeListener('message', cb); // done listening b/c reject()
-
-              reject( m.$$reject );
-            } else {
-              self.trigger( new $$.Event({}, { type: 'message', message: m }) );
-            }
-          });
-
-          // ask the child process to eval the worker code
-          child.send({
-            $$eval: fnStr
-          });
         } else {
           $$.error('Tried to create thread but no underlying tech found!');
           // TODO fallback on main JS thread?
@@ -9926,6 +9861,15 @@ this.cytoscape = cytoscape;
       }
 
       var id = data.id; // id is finalised, now let's keep a ref
+
+      if( ele.isNode() ){ // extra checks for nodes
+        var node = ele;
+        var pos = _private.position;
+
+        // make sure we have a defined position
+        if( pos.x == null ){ pos.x = 0; }
+        if( pos.y == null ){ pos.y = 0; }
+      }
 
       if( ele.isEdge() ){ // extra checks for edges
 
