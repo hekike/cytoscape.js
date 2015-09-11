@@ -91,48 +91,9 @@
         if( ret !== undefined ){ fulfil(ret); }
         if( next ){ next(); }
       };
-      var onCheckWindowDone = function(){
-        if( !done ){
-          checkCommonJs( onCheckCommonJsDone );
-        }
-      };
-
-      var checkCommonJs = function( next ){
-        if( typeof module !== 'undefined' && module.exports && require ){ // detected commonjs env
-          try {
-            ret = require( name ); // regular require
-          } catch( err ){}
-        }
-
-        if( ret !== undefined ){ fulfil(ret); }
-        if( next ){ next(); }
-      };
-      var onCheckCommonJsDone = function(){
-        if( !done ){
-          checkAmd( onCheckAmdDone );
-        }
-      };
-
-      var checkAmd = function( next ){
-        if( typeof define !== 'undefined' && define.amd && require ){ // detected amd env w/ defined module
-          require([ name ], function( nameImpl ){
-            ret = nameImpl;
-
-            if( ret !== undefined ){ fulfil(ret); }
-            if( next ){ next(); }
-          }, function( err ){
-            if( next ){ next(); }
-          });
-        }
-      };
-      var onCheckAmdDone = function(){
-        if( !done && options.msgIfNotFound ){
-          $$.util.error('Cytoscape.js tried to pull in dependency `' + name + '` but no module (i.e. CommonJS, AMD, or window) was found');
-        }
-      };
 
       // kick off 1st check: window
-      checkWindow( onCheckWindowDone );
+      checkWindow();
 
     },
 

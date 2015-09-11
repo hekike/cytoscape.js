@@ -175,9 +175,6 @@
         });
       }
 
-      var useWW = window != null;
-      var useNode = typeof module !== 'undefined';
-
       self.trigger('run');
 
       var runP = new $$.Promise(function( resolve, reject ){
@@ -192,20 +189,16 @@
         var fnStr = '\n' + ( _p.requires.map(function( r ){
           return fnAsRequire( r );
         }) ).concat( _p.files.map(function( f ){
-          if( useWW ){
-            var wwifyFile = function( file ){
-              if( file.match(/^\.\//) || file.match(/^\.\./) ){
-                return window.location.origin + window.location.pathname + file;
-              } else if( file.match(/^\//) ){
-                return window.location.origin + '/' + file;
-              }
-              return file;
-            };
+          var wwifyFile = function( file ){
+            if( file.match(/^\.\//) || file.match(/^\.\./) ){
+              return window.location.origin + window.location.pathname + file;
+            } else if( file.match(/^\//) ){
+              return window.location.origin + '/' + file;
+            }
+            return file;
+          };
 
-            return 'importScripts("' + wwifyFile(f) + '");';
-          } else if( useNode ) {
-            return 'eval( require("fs").readFileSync("' + f + '", { encoding: "utf8" }) );';
-          }
+          return 'importScripts("' + wwifyFile(f) + '");';
         }) ).concat([
           '( function(){',
             'var ret = (' + fnImplStr + ')(' + JSON.stringify(pass) + ');',
@@ -217,36 +210,35 @@
         _p.requires = [];
         _p.files = [];
 
-        if( useWW ){
-          var fnBlob, fnUrl;
+        var fnBlob, fnUrl;
 
-          // add normalised thread api functions
-          if( !threadTechAlreadyExists ){
-            var fnPre = fnStr + '';
+        // add normalised thread api functions
+        if( !threadTechAlreadyExists ){
+          var fnPre = fnStr + '';
 
-            fnStr = [
-              'function broadcast(m){ return message(m); };', // alias
-              'function message(m){ postMessage(m); };',
-              'function listen(fn){',
-              '  self.addEventListener("message", function(m){ ',
-              '    if( typeof m === "object" && (m.data.$$eval || m.data === "$$start") ){',
-              '    } else { ',
-              '      fn( m.data );',
-              '    }',
-              '  });',
-              '};',
-              'self.addEventListener("message", function(m){  if( m.data.$$eval ){ eval( m.data.$$eval ); }  });',
-              'function resolve(v){ postMessage({ $$resolve: v }); };',
-              'function reject(v){ postMessage({ $$reject: v }); };'
-            ].join('\n');
+          fnStr = [
+            'function broadcast(m){ return message(m); };', // alias
+            'function message(m){ postMessage(m); };',
+            'function listen(fn){',
+            '  self.addEventListener("message", function(m){ ',
+            '    if( typeof m === "object" && (m.data.$$eval || m.data === "$$start") ){',
+            '    } else { ',
+            '      fn( m.data );',
+            '    }',
+            '  });',
+            '};',
+            'self.addEventListener("message", function(m){  if( m.data.$$eval ){ eval( m.data.$$eval ); }  });',
+            'function resolve(v){ postMessage({ $$resolve: v }); };',
+            'function reject(v){ postMessage({ $$reject: v }); };'
+          ].join('\n');
 
-            fnStr += fnPre;
+          fnStr += fnPre;
 
-            fnBlob = new Blob([ fnStr ], {
-              type: 'application/javascript'
-            });
-            fnUrl = window.URL.createObjectURL( fnBlob );
-          }
+          fnBlob = new Blob([ fnStr ], {
+            type: 'application/javascript'
+          });
+          fnUrl = window.URL.createObjectURL( fnBlob );
+
           // create webworker and let it exec the serialised code
           var ww = _p.webworker = _p.webworker || new Worker( fnUrl );
 
@@ -278,32 +270,6 @@
             ww.postMessage('$$start'); // start up the worker
           }
 
-        } else if( useNode ){
-          // create a new process
-          var path = require('path');
-          var child_process = require('child_process');
-          var child = _p.child = _p.child || child_process.fork( path.join(__dirname, 'thread-node-fork') );
-
-          // child process messages => events
-          var cb;
-          child.on('message', cb = function( m ){
-            if( $$.is.object(m) && ('$$resolve' in m) ){
-              child.removeListener('message', cb); // done listening b/c resolve()
-
-              resolve( m.$$resolve );
-            } else if( $$.is.object(m) && ('$$reject' in m) ){
-              child.removeListener('message', cb); // done listening b/c reject()
-
-              reject( m.$$reject );
-            } else {
-              self.trigger( new $$.Event({}, { type: 'message', message: m }) );
-            }
-          });
-
-          // ask the child process to eval the worker code
-          child.send({
-            $$eval: fnStr
-          });
         } else {
           $$.error('Tried to create thread but no underlying tech found!');
           // TODO fallback on main JS thread?
